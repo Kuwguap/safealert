@@ -12,6 +12,7 @@ export default function AuthScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [asAdmin, setAsAdmin] = useState(false);
+  const [ownPhone, setOwnPhone] = useState('');
   const [contacts, setContacts] = useState<EmergencyContact[]>([]);
   const [cName, setCName] = useState('');
   const [cPhone, setCPhone] = useState('');
@@ -64,7 +65,7 @@ export default function AuthScreen() {
     const err =
       mode === 'login'
         ? await auth.signIn(email, password)
-        : await auth.signUp(name, email, password, role, effectiveContacts);
+        : await auth.signUp(name, email, password, role, effectiveContacts, ownPhone);
     if (err) setError(err);
     setBusy(false);
   };
@@ -128,6 +129,16 @@ export default function AuthScreen() {
             placeholderTextColor={colors.faint}
             secureTextEntry
           />
+          {mode === 'signup' ? (
+            <TextInput
+              style={styles.input}
+              value={ownPhone}
+              onChangeText={setOwnPhone}
+              placeholder="Your phone — gets SMS for extreme alerts (optional)"
+              placeholderTextColor={colors.faint}
+              keyboardType="phone-pad"
+            />
+          ) : null}
 
           {mode === 'signup' ? (
             <View style={styles.contactsBlock}>

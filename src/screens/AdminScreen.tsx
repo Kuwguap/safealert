@@ -4,6 +4,7 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, Vie
 import { backend } from '../api/backend';
 import { ActivityEvent, community, CommunityAlert } from '../api/community';
 import { AlertType } from '../api/nws';
+import { sendSmsViaGateway } from '../api/sms';
 import { ImageAttach, usePickedImage } from '../components/ImagePick';
 import { BackHeader, Card, SectionLabel } from '../components/ui';
 import { sendLocalNotification } from '../notify';
@@ -91,9 +92,26 @@ export default function AdminScreen({ onBack }: { onBack: () => void }) {
       setPubMsg('⚠ Server unreachable — saved on this device only. Check your connection and publish again.');
       return;
     }
+    const savedHeadline = headline.trim();
     setHeadline('');
     setDescription('');
     picked.clear();
+    // Extreme AMBER alerts additionally SMS-blast every registered phone
+    if (chosen.type === 'amber' && SEVERITIES[severity] === 'Extreme') {
+      setPubMsg('✓ Published — sending SMS blast…');
+      const sms = await sendSmsViaGateway(
+        'amber',
+        `🚨 AMBER ALERT (Extreme): ${savedHeadline} — near ${app.locationLabel}. Open SafeAlert: https://kuwguap.github.io/safealert/`
+      );
+      setPubMsg(
+        sms.ok && sms.count > 0
+          ? `✓ Published + SMS blast sent to ${sms.count} registered phone${sms.count === 1 ? '' : 's'} (Arkesel).`
+          : sms.skipped
+            ? '✓ Published. SMS blast skipped — no users have a phone number on their profile yet.'
+            : '✓ Published, but the SMS blast failed — check Arkesel credits.'
+      );
+      return;
+    }
     setPubMsg('✓ Published — reaches every device within ~20s (feed, map, notification).');
   };
 

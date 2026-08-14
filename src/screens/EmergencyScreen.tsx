@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 import { community } from '../api/community';
-import { composeSms, sosMessage } from '../api/sms';
+import { composeSms, sendSmsViaGateway, sosMessage } from '../api/sms';
 import { Card, SectionLabel } from '../components/ui';
 import { sendLocalNotification } from '../notify';
 import { useApp } from '../state/AppContext';
@@ -151,15 +151,28 @@ export default function EmergencyScreen() {
       targetEmails: contacts.map((c) => c.email).filter(Boolean),
     });
 
-  const sendSms = () => composeSms(contacts, sosMessage(auth.user?.name ?? 'me', app.center, app.locationLabel));
+  const [smsStatus, setSmsStatus] = useState<string | null>(null);
+  const message = () => sosMessage(auth.user?.name ?? 'me', app.center, app.locationLabel);
+
+  // Automatic Arkesel SMS first; device composer as fallback
+  const sendSms = async () => {
+    setSmsStatus('Sending SMS…');
+    const result = await sendSmsViaGateway('sos', message(), contacts.map((c) => c.phone));
+    if (result.ok && result.count > 0) {
+      setSmsStatus(`✓ SMS delivered automatically to ${result.count} contact${result.count === 1 ? '' : 's'} (Arkesel)`);
+    } else {
+      setSmsStatus('Gateway unavailable — opening your SMS app instead.');
+      const opened = await composeSms(contacts, message());
+      setSmsStatus(opened ? 'SMS composer opened — tap send.' : '⚠ Could not send SMS from this device.');
+    }
+  };
 
   const onSosStateChange = (s: SosState) => {
     setSosState(s);
     if (s === 'sent') {
       // 1. in-app alarm for contacts on SafeAlert (via the backend event)
       logEvent('sos', `Live location: ${app.center.lat.toFixed(4)}, ${app.center.lon.toFixed(4)}`);
-      // 2. carrier SMS to every contact — composer opens prefilled with the
-      //    location link; works on any Ghanaian number, no gateway needed
+      // 2. automatic carrier SMS to every contact
       sendSms();
     }
   };
@@ -191,6 +204,7 @@ export default function EmergencyScreen() {
                   ? `Alarms ${contacts.map((c) => c.name).join(', ')} in-app and texts them your live location.`
                   : 'Shares your live location with your emergency contacts and the local hotline.'}
             </Text>
+            {sosState === 'sent' && smsStatus ? <Text style={styles.smsStatus}>{smsStatus}</Text> : null}
             {sosState === 'sent' && contacts.length ? (
               <View style={styles.sosActions}>
                 <Pressable style={styles.sosActionBtn} onPress={callFirst}>
@@ -305,6 +319,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
   },
   sosTitle: { fontFamily: fonts.sora700, fontSize: 16, color: colors.ink },
+  smsStatus: { fontFamily: fonts.sans600, fontSize: 12, color: colors.safe, marginTop: 6 },
   sosActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
   sosActionBtn: {
     paddingVertical: 8,

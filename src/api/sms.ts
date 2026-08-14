@@ -1,20 +1,50 @@
 import * as SMS from 'expo-sms';
 import { Linking, Platform } from 'react-native';
+import { getAccessToken, SUPABASE_ANON_KEY, SUPABASE_URL } from './supabase';
 import { EmergencyContact } from '../state/AuthContext';
 import { LatLng } from '../util/geo';
 
-// SOS text messages. There is no keyless server-side SMS gateway that
-// delivers to Ghanaian numbers (Arkesel / Hubtel / mNotify / Twilio all need
-// paid accounts), so the free channel that always works is the sender's own
-// SIM: we open the native SMS composer prefilled with every emergency
-// contact and the live-location link — one tap sends over the carrier to any
-// Ghana number, no API, no cost beyond a normal SMS.
-//
-// To switch to server-side SMS later, get an API key from https://sms.arkesel.com
-// (Ghanaian provider, has a free trial) and POST to
-//   https://sms.arkesel.com/api/v2/sms/send
-//   { "sender": "SafeAlert", "message": ..., "recipients": ["233..."] }
-// with header "api-key" — slot it in below as the first attempt.
+// SOS text messages — two channels:
+// 1. Automatic: the `send-sms` Supabase Edge Function relays through Arkesel
+//    (Ghanaian SMS gateway). The API key lives server-side only; the function
+//    authenticates the caller and rate-caps recipients. kind 'sos' texts the
+//    sender's emergency contacts; kind 'amber' (admins) blasts every
+//    registered profile phone for Extreme AMBER alerts.
+// 2. Fallback: the device's own SMS composer, prefilled — works with no
+//    gateway credit, over the sender's SIM.
+
+export interface GatewayResult {
+  ok: boolean;
+  count: number;
+  skipped?: boolean;
+}
+
+// Automatic SMS via the server-side Arkesel relay. Never throws.
+export async function sendSmsViaGateway(
+  kind: 'sos' | 'amber',
+  message: string,
+  recipients: string[] = []
+): Promise<GatewayResult> {
+  try {
+    const token = await getAccessToken();
+    if (!token) return { ok: false, count: 0 };
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/send-sms`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        apikey: SUPABASE_ANON_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ kind, message, recipients }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (data?.status === 'sent') return { ok: true, count: data.count ?? recipients.length };
+    if (data?.status === 'skipped') return { ok: true, count: 0, skipped: true };
+    return { ok: false, count: 0 };
+  } catch {
+    return { ok: false, count: 0 };
+  }
+}
 
 export function sosMessage(name: string, center: LatLng, locationLabel: string): string {
   return (

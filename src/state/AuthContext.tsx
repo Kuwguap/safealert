@@ -20,6 +20,7 @@ export interface User {
   email: string;
   role: Role;
   contacts: EmergencyContact[];
+  phone: string; // user's own number — receives Extreme AMBER SMS blasts
 }
 
 interface AuthState {
@@ -31,7 +32,8 @@ interface AuthState {
     email: string,
     password: string,
     role: Role,
-    contacts: EmergencyContact[]
+    contacts: EmergencyContact[],
+    phone: string
   ) => Promise<string | null>;
   resetPassword: (email: string) => Promise<string | null>;
   signOut: () => void;
@@ -49,7 +51,7 @@ export function useAuth(): AuthState {
 // server-side profile trigger hasn't committed yet.
 async function loadUser(id: string, email: string): Promise<User> {
   for (let attempt = 0; attempt < 2; attempt++) {
-    const { data } = await supabase.from('profiles').select('name, role, contacts').eq('id', id).maybeSingle();
+    const { data } = await supabase.from('profiles').select('name, role, contacts, phone').eq('id', id).maybeSingle();
     if (data) {
       return {
         id,
@@ -57,11 +59,12 @@ async function loadUser(id: string, email: string): Promise<User> {
         name: data.name ?? '',
         role: (data.role as Role) ?? 'user',
         contacts: Array.isArray(data.contacts) ? (data.contacts as EmergencyContact[]) : [],
+        phone: data.phone ?? '',
       };
     }
     await new Promise((r) => setTimeout(r, 400));
   }
-  return { id, email, name: email.split('@')[0], role: 'user', contacts: [] };
+  return { id, email, name: email.split('@')[0], role: 'user', contacts: [], phone: '' };
 }
 
 function friendly(message: string): string {
@@ -103,7 +106,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const value: AuthState = {
     ready,
     user,
-    signUp: async (name, email, password, role, contacts) => {
+    signUp: async (name, email, password, role, contacts, phone) => {
       const cleanEmail = email.trim().toLowerCase();
       if (!name.trim()) return 'Enter your name.';
       if (!/^\S+@\S+\.\S+$/.test(cleanEmail)) return 'Enter a valid email address.';
@@ -112,7 +115,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { data, error } = await supabase.auth.signUp({
         email: cleanEmail,
         password,
-        options: { data: { name: name.trim(), role, contacts } },
+        options: { data: { name: name.trim(), role, contacts, phone: phone.trim() } },
       });
       if (error) return friendly(error.message);
       // Signups are auto-confirmed server-side; get a session immediately.
