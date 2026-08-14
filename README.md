@@ -1,15 +1,26 @@
 # SafeAlert — React Native (Expo) app
 
-Implementation of the screens from `../README.md` (design handoff), running on
-live data — no mock content. Includes local auth (login/signup), an admin
-dashboard for publishing alerts, and notifications. Default area: KNUST, Kumasi.
+Location-aware emergency alerts app for Ghana, running on live data — no mock
+content. Real **Supabase Auth** (login / signup / password reset), an admin
+dashboard for publishing alerts and broadcasts, cross-device sync, and
+notifications. Default area: KNUST, Kumasi.
 
-## Run
+## Hosted web app (PWA)
+
+A production web build is deployed to **GitHub Pages** — open it in any browser,
+no Expo needed, and "Add to Home Screen" installs it like a native app:
+
+> **https://kuwguap.github.io/safealert/**  (admin dashboard at `/safealert/admin`)
+
+Admin login credentials are provided separately (not committed to this repo).
+
+## Run locally
 
 ```sh
 npm install
 npm start          # Expo dev server — scan the QR with Expo Go
 npm run web        # or preview in a browser
+npm run deploy     # rebuild + publish the web app to GitHub Pages
 ```
 
 ## Live data sources (no API keys required)

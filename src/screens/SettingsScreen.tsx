@@ -1,6 +1,7 @@
-import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { AlertType } from '../api/nws';
+import { supabase } from '../api/supabase';
 import { Card, SectionLabel } from '../components/ui';
 import { useApp } from '../state/AppContext';
 import { useAuth } from '../state/AuthContext';
@@ -18,6 +19,18 @@ export default function SettingsScreen({ onOpenAdmin }: { onOpenAdmin: () => voi
   const app = useApp();
   const auth = useAuth();
   const s = app.settings;
+  const [newPassword, setNewPassword] = useState('');
+  const [pwMsg, setPwMsg] = useState<string | null>(null);
+
+  const changePassword = async () => {
+    if (newPassword.length < 6) {
+      setPwMsg('Password needs at least 6 characters.');
+      return;
+    }
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    setPwMsg(error ? error.message : '✓ Password updated.');
+    if (!error) setNewPassword('');
+  };
 
   return (
     <View style={styles.screen}>
@@ -57,6 +70,25 @@ export default function SettingsScreen({ onOpenAdmin }: { onOpenAdmin: () => voi
               <Text style={styles.adminBtnText}>Open admin dashboard</Text>
             </Pressable>
           ) : null}
+        </Card>
+
+        {/* Security */}
+        <Card style={styles.card}>
+          <SectionLabel>Change password</SectionLabel>
+          <View style={styles.pwRow}>
+            <TextInput
+              style={styles.pwInput}
+              value={newPassword}
+              onChangeText={setNewPassword}
+              placeholder="New password"
+              placeholderTextColor={colors.faint}
+              secureTextEntry
+            />
+            <Pressable style={styles.pwBtn} onPress={changePassword}>
+              <Text style={styles.pwBtnText}>Update</Text>
+            </Pressable>
+          </View>
+          {pwMsg ? <Text style={[styles.rowMeta, pwMsg.startsWith('✓') && { color: colors.safe }]}>{pwMsg}</Text> : null}
         </Card>
 
         {/* Alert types — filters the feed everywhere */}
@@ -162,6 +194,19 @@ const styles = StyleSheet.create({
   rowMeta: { fontFamily: fonts.sans400, fontSize: 11.5, color: colors.muted, marginTop: 1 },
   refreshLink: { fontFamily: fonts.sans600, fontSize: 12, color: colors.primary },
   signOutLink: { fontFamily: fonts.sans600, fontSize: 12, color: colors.sos },
+  pwRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  pwInput: {
+    flex: 1,
+    paddingVertical: 11,
+    paddingHorizontal: 13,
+    backgroundColor: colors.insetBg,
+    borderRadius: 11,
+    fontFamily: fonts.sans400,
+    fontSize: 13.5,
+    color: colors.ink,
+  },
+  pwBtn: { paddingVertical: 11, paddingHorizontal: 16, backgroundColor: colors.primary, borderRadius: 11 },
+  pwBtnText: { fontFamily: fonts.sans600, fontSize: 13, color: '#fff' },
   adminBtn: {
     marginTop: 6,
     paddingVertical: 12,

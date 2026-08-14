@@ -1,11 +1,13 @@
 {
   "expo": {
-    "name": "safealert",
+    "name": "SafeAlert",
     "slug": "safealert",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "backgroundColor": "#faf7f1",
+    "primaryColor": "#b45309",
     "ios": {
       "supportsTablet": true
     },
@@ -18,7 +20,20 @@
       }
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro",
+      "output": "single",
+      "name": "SafeAlert",
+      "shortName": "SafeAlert",
+      "description": "Location-aware emergency alerts for Ghana — AMBER, floods, weather, SOS.",
+      "themeColor": "#b45309",
+      "backgroundColor": "#faf7f1",
+      "display": "standalone",
+      "orientation": "portrait",
+      "startUrl": "."
+    },
+    "experiments": {
+      "baseUrl": "/safealert"
     },
     "plugins": [
       "expo-font"

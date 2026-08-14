@@ -33,10 +33,13 @@ type Route =
 
 // Web-only: keep the admin dashboard addressable at /admin
 const isWeb = Platform.OS === 'web' && typeof window !== 'undefined';
+// Works whether the app is served at "/" or under a base path like "/safealert"
+const atAdminPath = () => isWeb && /\/admin\/?$/.test(window.location.pathname);
 function syncAdminPath(stack: Route[]) {
   if (!isWeb) return;
   const wantsAdmin = stack.some((r) => r.name === 'admin');
-  const path = wantsAdmin ? '/admin' : '/';
+  const base = window.location.pathname.replace(/\/admin\/?$/, '').replace(/\/$/, '');
+  const path = wantsAdmin ? `${base}/admin` : `${base}/`;
   if (window.location.pathname !== path) window.history.replaceState({}, '', path);
 }
 
@@ -107,9 +110,7 @@ function Root() {
   const auth = useAuth();
   const [tab, setTab] = useState<TabName>('alerts');
   // deep link: opening the web app at /admin lands admins on the dashboard
-  const [stack, setStack] = useState<Route[]>(() =>
-    isWeb && window.location.pathname === '/admin' ? [{ name: 'admin' }] : []
-  );
+  const [stack, setStack] = useState<Route[]>(() => (atAdminPath() ? [{ name: 'admin' }] : []));
 
   const setStackSynced = (updater: (s: Route[]) => Route[]) =>
     setStack((s) => {

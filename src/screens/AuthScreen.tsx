@@ -17,7 +17,19 @@ export default function AuthScreen() {
   const [cPhone, setCPhone] = useState('');
   const [cEmail, setCEmail] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const forgotPassword = async () => {
+    if (busy) return;
+    setError(null);
+    setNotice(null);
+    setBusy(true);
+    const err = await auth.resetPassword(email);
+    if (err) setError(err);
+    else setNotice('Password reset link sent — check your email.');
+    setBusy(false);
+  };
 
   const addContact = () => {
     if (!cName.trim() || !cPhone.trim()) {
@@ -189,6 +201,7 @@ export default function AuthScreen() {
           ) : null}
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
+          {notice ? <Text style={styles.notice}>{notice}</Text> : null}
 
           <Pressable style={styles.submit} onPress={submit}>
             {busy ? (
@@ -197,10 +210,16 @@ export default function AuthScreen() {
               <Text style={styles.submitText}>{mode === 'login' ? 'Log in' : 'Create account'}</Text>
             )}
           </Pressable>
+
+          {mode === 'login' ? (
+            <Pressable onPress={forgotPassword} hitSlop={8} style={styles.forgot}>
+              <Text style={styles.forgotText}>Forgot password?</Text>
+            </Pressable>
+          ) : null}
         </View>
 
         <Text style={styles.footnote}>
-          Accounts are stored on this device for the demo — production uses the proposal's Firebase auth.
+          Secured by Supabase Auth — your password is encrypted and your account works on any device.
         </Text>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -299,6 +318,9 @@ const styles = StyleSheet.create({
   adminTitle: { fontFamily: fonts.sans600, fontSize: 13, color: colors.ink },
   adminMeta: { fontFamily: fonts.sans400, fontSize: 11, color: colors.muted },
   error: { fontFamily: fonts.sans500, fontSize: 12.5, color: colors.sos },
+  notice: { fontFamily: fonts.sans500, fontSize: 12.5, color: colors.safe },
+  forgot: { alignSelf: 'center', paddingVertical: 4 },
+  forgotText: { fontFamily: fonts.sans600, fontSize: 12.5, color: colors.primary },
   submit: {
     marginTop: 4,
     paddingVertical: 15,
