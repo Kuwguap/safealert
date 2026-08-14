@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 import { community } from '../api/community';
+import { composeSms, sosMessage } from '../api/sms';
 import { Card, SectionLabel } from '../components/ui';
 import { sendLocalNotification } from '../notify';
 import { useApp } from '../state/AppContext';
@@ -150,16 +151,22 @@ export default function EmergencyScreen() {
       targetEmails: contacts.map((c) => c.email).filter(Boolean),
     });
 
+  const sendSms = () => composeSms(contacts, sosMessage(auth.user?.name ?? 'me', app.center, app.locationLabel));
+
   const onSosStateChange = (s: SosState) => {
     setSosState(s);
     if (s === 'sent') {
+      // 1. in-app alarm for contacts on SafeAlert (via the backend event)
       logEvent('sos', `Live location: ${app.center.lat.toFixed(4)}, ${app.center.lon.toFixed(4)}`);
-      // open the dialer to the first emergency contact (user confirms the call)
-      const first = contacts[0];
-      if (first?.phone && Platform.OS !== 'web') {
-        Linking.openURL(`tel:${first.phone.replace(/[^+\d]/g, '')}`).catch(() => {});
-      }
+      // 2. carrier SMS to every contact — composer opens prefilled with the
+      //    location link; works on any Ghanaian number, no gateway needed
+      sendSms();
     }
+  };
+
+  const callFirst = () => {
+    const first = contacts[0];
+    if (first?.phone) Linking.openURL(`tel:${first.phone.replace(/[^+\d]/g, '')}`).catch(() => {});
   };
 
   return (
@@ -178,12 +185,22 @@ export default function EmergencyScreen() {
             <Text style={styles.sosText}>
               {sosState === 'sent'
                 ? contacts.length
-                  ? `Alerting ${contacts.map((c) => c.name).join(', ')} — dialing ${contacts[0]?.name} now.`
+                  ? `In-app alarm + SMS sent to ${contacts.map((c) => c.name).join(', ')}.`
                   : 'SOS logged. Add emergency contacts at signup to alert your people.'
                 : contacts.length
-                  ? `Shares your live location with ${contacts.map((c) => c.name).join(', ')} and dials ${contacts[0]?.name}.`
+                  ? `Alarms ${contacts.map((c) => c.name).join(', ')} in-app and texts them your live location.`
                   : 'Shares your live location with your emergency contacts and the local hotline.'}
             </Text>
+            {sosState === 'sent' && contacts.length ? (
+              <View style={styles.sosActions}>
+                <Pressable style={styles.sosActionBtn} onPress={callFirst}>
+                  <Text style={styles.sosActionText}>📞 Call {contacts[0]?.name}</Text>
+                </Pressable>
+                <Pressable style={styles.sosActionBtn} onPress={sendSms}>
+                  <Text style={styles.sosActionText}>✉️ Resend SMS</Text>
+                </Pressable>
+              </View>
+            ) : null}
           </View>
         </Card>
 
@@ -288,6 +305,15 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
   },
   sosTitle: { fontFamily: fonts.sora700, fontSize: 16, color: colors.ink },
+  sosActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
+  sosActionBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderWidth: 1.5,
+    borderColor: colors.sos,
+    borderRadius: 999,
+  },
+  sosActionText: { fontFamily: fonts.sans600, fontSize: 12, color: colors.sos },
   sosText: {
     fontFamily: fonts.sans400,
     fontSize: 12.5,

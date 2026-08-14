@@ -23,6 +23,7 @@ export interface CommunityAlert {
   lon: number;
   sent: string; // ISO
   author: string;
+  imageUrl: string | null;
 }
 
 export type ActivityKind = 'sos' | 'checkin' | 'tip';
@@ -72,6 +73,7 @@ function rowToAlert(r: any): CommunityAlert {
     lon: r.lon,
     sent: r.created_at,
     author: r.author ?? 'Anonymous',
+    imageUrl: r.image_url ?? null,
   };
 }
 
@@ -152,6 +154,7 @@ export const community = {
         lat: alert.lat,
         lon: alert.lon,
         author: alert.author,
+        image_url: alert.imageUrl,
       });
       const full = rowToAlert(row);
       alerts = [full, ...alerts.filter((x) => x.id !== full.id)];

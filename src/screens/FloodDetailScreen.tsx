@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { community } from '../api/community';
 import { ActiveAlert } from '../api/nws';
 import MapPanel, { MapChip, mapChipText } from '../components/MapPanel';
@@ -50,6 +50,7 @@ export default function FloodDetailScreen({ alert, onBack }: { alert: ActiveAler
           <Text style={styles.headline} numberOfLines={2}>
             {alert.headline.split(' by NWS')[0]}
           </Text>
+          {alert.imageUrl ? <Image source={{ uri: alert.imageUrl }} style={styles.photo} resizeMode="cover" /> : null}
           <ScrollView style={styles.descScroll}>
             <Text style={styles.bodyText}>{shortDesc || 'No details provided.'}</Text>
           </ScrollView>
@@ -113,6 +114,7 @@ const styles = StyleSheet.create({
   },
   statusCard: { padding: 14 },
   headline: { fontFamily: fonts.sora700, fontSize: 17, color: colors.ink },
+  photo: { width: '100%', height: 140, borderRadius: 12, marginTop: 10, backgroundColor: colors.insetBg },
   descScroll: { maxHeight: 96, marginTop: 4 },
   bodyText: {
     fontFamily: fonts.sans400,

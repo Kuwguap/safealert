@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { ActiveAlert } from '../api/nws';
 import MapPanel, { MapChip, MapView, mapChipText } from '../components/MapPanel';
 import { BackHeader, Card, LivePill } from '../components/ui';
@@ -40,6 +40,7 @@ export default function AmberDetailScreen({
           <Text style={styles.headline} numberOfLines={2}>
             {alert.headline.split(' by NWS')[0]}
           </Text>
+          {alert.imageUrl ? <Image source={{ uri: alert.imageUrl }} style={styles.photo} resizeMode="cover" /> : null}
           <ScrollView style={styles.descScroll}>
             <Text style={styles.descText}>
               {alert.description.trim() || 'Details are being distributed by the issuing agency.'}
@@ -97,6 +98,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   headline: { fontFamily: fonts.sora700, fontSize: 17, color: colors.ink },
+  photo: { width: '100%', height: 160, borderRadius: 12, marginTop: 10, backgroundColor: colors.insetBg },
   descScroll: { maxHeight: 150, marginTop: 6 },
   descText: {
     fontFamily: fonts.sans400,

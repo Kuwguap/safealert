@@ -21,6 +21,7 @@ export interface ActiveAlert {
   senderName: string;
   centroid: LatLng | null;
   distanceMi: number | null; // from the active location, when geometry known
+  imageUrl?: string | null; // community/admin bulletins may attach a photo
 }
 
 function classify(event: string): AlertType {

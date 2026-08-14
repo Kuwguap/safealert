@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { community } from '../api/community';
 import { AlertType } from '../api/nws';
+import { ImageAttach, usePickedImage } from '../components/ImagePick';
 import { BackHeader, Card, SectionLabel } from '../components/ui';
 import { useApp } from '../state/AppContext';
 import { useAuth } from '../state/AuthContext';
@@ -25,6 +26,7 @@ export default function PostAlertScreen({ onBack }: { onBack: () => void }) {
   const [description, setDescription] = useState('');
   const [state, setState] = useState<'idle' | 'posting' | 'done'>('idle');
   const [error, setError] = useState<string | null>(null);
+  const picked = usePickedImage();
 
   const submit = async () => {
     if (state !== 'idle') return;
@@ -34,6 +36,12 @@ export default function PostAlertScreen({ onBack }: { onBack: () => void }) {
     }
     setError(null);
     setState('posting');
+    const imageUrl = await picked.upload();
+    if (picked.hasImage && !imageUrl) {
+      setState('idle');
+      setError("Couldn't upload the photo — check your connection and try again.");
+      return;
+    }
     const chosen = POST_TYPES[typeIdx];
     const saved = await community.publishAlert({
       source: 'community',
@@ -46,6 +54,7 @@ export default function PostAlertScreen({ onBack }: { onBack: () => void }) {
       lat: app.center.lat,
       lon: app.center.lon,
       author: auth.user?.name ?? 'Anonymous',
+      imageUrl,
     });
     if (saved.id.startsWith('local-')) {
       setState('idle');
@@ -84,6 +93,7 @@ export default function PostAlertScreen({ onBack }: { onBack: () => void }) {
             placeholderTextColor={colors.faint}
             multiline
           />
+          <ImageAttach picked={picked} />
           {error ? <Text style={styles.error}>{error}</Text> : null}
           <Pressable style={[styles.submit, state === 'done' && styles.submitDone]} onPress={submit}>
             <Text style={styles.submitText}>

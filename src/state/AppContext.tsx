@@ -36,6 +36,7 @@ const FALLBACK_LABEL = 'KNUST, Kumasi';
 
 const PLACES_KEY = 'safealert.places';
 const SETTINGS_KEY = 'safealert.settings';
+const ACKED_SOS_KEY = 'safealert.ackedSos';
 
 // Community bulletin → the shared alert shape the screens consume
 function toActiveAlert(c: CommunityAlert, center: LatLng): ActiveAlert {
@@ -60,6 +61,7 @@ function toActiveAlert(c: CommunityAlert, center: LatLng): ActiveAlert {
     senderName: sender,
     centroid: { lat: c.lat, lon: c.lon },
     distanceMi: distanceMi(center, { lat: c.lat, lon: c.lon }),
+    imageUrl: c.imageUrl,
   };
 }
 
@@ -86,6 +88,8 @@ interface AppState {
   lastUpdated: number | null;
   incoming: Notice | null; // in-app toast payload
   backendOk: boolean | null;
+  sosAlarm: ActivityEvent | null; // active full-screen SOS alarm
+  dismissSosAlarm: () => void; // acknowledge — stops siren, never re-fires for that event
   showNotice: (n: Notice) => void; // fire the in-app toast directly (tests/previews)
   dismissIncoming: () => void;
   refresh: () => Promise<void>;
@@ -122,18 +126,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const [incoming, setIncoming] = useState<Notice | null>(null);
+  const [sosAlarm, setSosAlarm] = useState<ActivityEvent | null>(null);
   const fetchSeq = useRef(0);
   const knownIds = useRef<Set<string> | null>(null);
   const knownEventIds = useRef<Set<string> | null>(null);
+  const ackedSos = useRef<Set<string>>(new Set());
 
   // Load persisted places/settings; subscribe to the community store and
   // poll it so other devices' posts/broadcasts/SOS arrive within seconds
   useEffect(() => {
     (async () => {
       try {
-        const [p, s] = await Promise.all([AsyncStorage.getItem(PLACES_KEY), AsyncStorage.getItem(SETTINGS_KEY)]);
+        const [p, s, a] = await Promise.all([
+          AsyncStorage.getItem(PLACES_KEY),
+          AsyncStorage.getItem(SETTINGS_KEY),
+          AsyncStorage.getItem(ACKED_SOS_KEY),
+        ]);
         if (p) setPlaces(JSON.parse(p));
         if (s) setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(s) });
+        if (a) ackedSos.current = new Set(JSON.parse(a));
       } catch {
         // first run / corrupted storage — keep defaults
       }
@@ -295,10 +306,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (knownIds.current) knownIds.current = ids;
   }, [alerts, lastUpdated]);
 
-  // SOS from someone who listed me as an emergency contact → urgent notice.
-  // On the first load after opening the app, still surface any targeted SOS
-  // from the last 10 minutes — missing one because the app was closed would
-  // defeat the point.
+  // SOS from someone who listed me as an emergency contact → full-screen
+  // alarm (siren + vibration) that persists until acknowledged. On the first
+  // load after opening the app, still surface any targeted SOS from the last
+  // 10 minutes — missing one because the app was closed would defeat the
+  // point. Acknowledged event ids persist so an alarm never re-fires.
   useEffect(() => {
     const myEmail = auth.user?.email;
     const ids = new Set(events.map((e) => e.id));
@@ -309,19 +321,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const fresh = events.find(
         (e) =>
           targetsMe(e) &&
+          !ackedSos.current.has(e.id) &&
           (firstRun
             ? Date.now() - Date.parse(e.ts) < 10 * 60 * 1000
             : !knownEventIds.current!.has(e.id))
       );
       if (fresh) {
-        const title = `🆘 SOS from ${fresh.user}`;
-        const body = `${fresh.locationLabel || 'Location shared'} · ${fresh.detail}`;
-        setIncoming({ title, body, tone: 'sos' });
-        sendLocalNotification(title, body);
+        setSosAlarm((current) => current ?? fresh);
+        sendLocalNotification(`🆘 SOS from ${fresh.user}`, `${fresh.locationLabel || 'Location shared'} · ${fresh.detail}`);
       }
     }
     knownEventIds.current = ids;
   }, [events, auth.user?.email]);
+
+  const dismissSosAlarm = () => {
+    setSosAlarm((current) => {
+      if (current) {
+        ackedSos.current.add(current.id);
+        AsyncStorage.setItem(ACKED_SOS_KEY, JSON.stringify([...ackedSos.current].slice(-200))).catch(() => {});
+      }
+      return null;
+    });
+  };
 
   const value: AppState = {
     center,
@@ -337,6 +358,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     lastUpdated,
     incoming,
     backendOk,
+    sosAlarm,
+    dismissSosAlarm,
     showNotice: setIncoming,
     dismissIncoming: () => setIncoming(null),
     refresh: async () => {

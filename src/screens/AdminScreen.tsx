@@ -4,6 +4,7 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, Vie
 import { backend } from '../api/backend';
 import { ActivityEvent, community, CommunityAlert } from '../api/community';
 import { AlertType } from '../api/nws';
+import { ImageAttach, usePickedImage } from '../components/ImagePick';
 import { BackHeader, Card, SectionLabel } from '../components/ui';
 import { sendLocalNotification } from '../notify';
 import { useApp } from '../state/AppContext';
@@ -46,6 +47,7 @@ export default function AdminScreen({ onBack }: { onBack: () => void }) {
   const [testResults, setTestResults] = useState<Record<string, string>>({});
   const [ping, setPing] = useState<{ ok: boolean; ms: number } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const picked = usePickedImage();
 
   useEffect(() => {
     backend.ping().then(setPing);
@@ -67,6 +69,11 @@ export default function AdminScreen({ onBack }: { onBack: () => void }) {
       setPubMsg('Add a headline first.');
       return;
     }
+    const imageUrl = await picked.upload();
+    if (picked.hasImage && !imageUrl) {
+      setPubMsg("⚠ Couldn't upload the photo — check your connection and try again.");
+      return;
+    }
     const saved = await community.publishAlert({
       source: 'admin',
       type: chosen.type,
@@ -78,6 +85,7 @@ export default function AdminScreen({ onBack }: { onBack: () => void }) {
       lat: app.center.lat,
       lon: app.center.lon,
       author: auth.user?.name ?? 'Admin',
+      imageUrl,
     });
     if (saved.id.startsWith('local-')) {
       setPubMsg('⚠ Server unreachable — saved on this device only. Check your connection and publish again.');
@@ -85,6 +93,7 @@ export default function AdminScreen({ onBack }: { onBack: () => void }) {
     }
     setHeadline('');
     setDescription('');
+    picked.clear();
     setPubMsg('✓ Published — reaches every device within ~20s (feed, map, notification).');
   };
 
@@ -104,6 +113,7 @@ export default function AdminScreen({ onBack }: { onBack: () => void }) {
       lat: app.center.lat,
       lon: app.center.lon,
       author: auth.user?.name ?? 'Admin',
+      imageUrl: null,
     });
     if (saved.id.startsWith('local-')) {
       setBcastMsg('⚠ Server unreachable — broadcast NOT sent to other devices. Check your connection and retry.');
@@ -138,7 +148,7 @@ export default function AdminScreen({ onBack }: { onBack: () => void }) {
           lon: app.center.lon,
           targetEmails: [auth.user?.email ?? ''],
         });
-        return 'logged — red SOS toast should appear now';
+        return 'logged — full-screen alarm + siren should fire now';
       },
     },
     {
@@ -155,6 +165,7 @@ export default function AdminScreen({ onBack }: { onBack: () => void }) {
           lat: app.center.lat,
           lon: app.center.lon,
           author: 'Smoke Test',
+          imageUrl: null,
         });
         return 'published — toast + feed card incoming';
       },
@@ -245,6 +256,7 @@ export default function AdminScreen({ onBack }: { onBack: () => void }) {
             placeholderTextColor={colors.faint}
             multiline
           />
+          <ImageAttach picked={picked} />
           <View style={styles.chipRow}>
             {SEVERITIES.map((s, i) => (
               <Pressable key={s} style={[styles.chip, severity === i && styles.chipActive]} onPress={() => setSeverity(i)}>

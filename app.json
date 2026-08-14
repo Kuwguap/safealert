@@ -36,7 +36,8 @@
       "baseUrl": "/safealert"
     },
     "plugins": [
-      "expo-font"
+      "expo-font",
+      "expo-audio"
     ]
   }
 }

@@ -8,6 +8,7 @@ import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import SosAlarm from './src/components/SosAlarm';
 import TabBar, { TabName } from './src/components/TabBar';
 import AdminScreen from './src/screens/AdminScreen';
 import AmberDetailScreen from './src/screens/AmberDetailScreen';
@@ -196,6 +197,7 @@ function Root() {
         />
       ) : null}
       <AlertToast onOpen={openAlert} />
+      {app.sosAlarm ? <SosAlarm event={app.sosAlarm} onDismiss={app.dismissSosAlarm} /> : null}
       {applyUpdate ? (
         <Pressable style={[styles.updateBar, { bottom: insets.bottom + 78 }]} onPress={applyUpdate}>
           <Text style={styles.updateBarText}>A new version of SafeAlert is ready — tap to update</Text>
