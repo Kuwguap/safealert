@@ -67,7 +67,7 @@ export default function AdminScreen({ onBack }: { onBack: () => void }) {
       setPubMsg('Add a headline first.');
       return;
     }
-    await community.publishAlert({
+    const saved = await community.publishAlert({
       source: 'admin',
       type: chosen.type,
       event: chosen.label,
@@ -79,6 +79,10 @@ export default function AdminScreen({ onBack }: { onBack: () => void }) {
       lon: app.center.lon,
       author: auth.user?.name ?? 'Admin',
     });
+    if (saved.id.startsWith('local-')) {
+      setPubMsg('⚠ Server unreachable — saved on this device only. Check your connection and publish again.');
+      return;
+    }
     setHeadline('');
     setDescription('');
     setPubMsg('✓ Published — reaches every device within ~20s (feed, map, notification).');
@@ -89,7 +93,7 @@ export default function AdminScreen({ onBack }: { onBack: () => void }) {
       setBcastMsg('Broadcast needs a title.');
       return;
     }
-    await community.publishAlert({
+    const saved = await community.publishAlert({
       source: 'broadcast',
       type: 'weather',
       event: broadcastTitle.trim(),
@@ -101,6 +105,10 @@ export default function AdminScreen({ onBack }: { onBack: () => void }) {
       lon: app.center.lon,
       author: auth.user?.name ?? 'Admin',
     });
+    if (saved.id.startsWith('local-')) {
+      setBcastMsg('⚠ Server unreachable — broadcast NOT sent to other devices. Check your connection and retry.');
+      return;
+    }
     setBroadcastTitle('');
     setBroadcastBody('');
     setBcastMsg('✓ Broadcast sent — toast + notification on every device.');

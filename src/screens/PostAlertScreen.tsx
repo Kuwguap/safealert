@@ -35,7 +35,7 @@ export default function PostAlertScreen({ onBack }: { onBack: () => void }) {
     setError(null);
     setState('posting');
     const chosen = POST_TYPES[typeIdx];
-    await community.publishAlert({
+    const saved = await community.publishAlert({
       source: 'community',
       type: chosen.type,
       event: chosen.event,
@@ -47,6 +47,11 @@ export default function PostAlertScreen({ onBack }: { onBack: () => void }) {
       lon: app.center.lon,
       author: auth.user?.name ?? 'Anonymous',
     });
+    if (saved.id.startsWith('local-')) {
+      setState('idle');
+      setError("Couldn't reach the server — the post stayed on this device. Check your connection and try again.");
+      return;
+    }
     setState('done');
     setTimeout(onBack, 900);
   };

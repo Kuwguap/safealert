@@ -23,6 +23,7 @@ import SettingsScreen from './src/screens/SettingsScreen';
 import { AppProvider, useApp } from './src/state/AppContext';
 import { AuthProvider, useAuth } from './src/state/AuthContext';
 import { colors, fonts } from './src/theme';
+import { startUpdateWatch } from './src/util/webUpdate';
 
 type Route =
   | { name: 'emergency' }
@@ -109,6 +110,9 @@ function Root() {
   const app = useApp();
   const auth = useAuth();
   const [tab, setTab] = useState<TabName>('alerts');
+  // web self-update: silent at launch, tap-banner while in use
+  const [applyUpdate, setApplyUpdate] = useState<(() => void) | null>(null);
+  useEffect(() => startUpdateWatch((apply) => setApplyUpdate(() => apply)), []);
   // deep link: opening the web app at /admin lands admins on the dashboard
   const [stack, setStack] = useState<Route[]>(() => (atAdminPath() ? [{ name: 'admin' }] : []));
 
@@ -192,6 +196,11 @@ function Root() {
         />
       ) : null}
       <AlertToast onOpen={openAlert} />
+      {applyUpdate ? (
+        <Pressable style={[styles.updateBar, { bottom: insets.bottom + 78 }]} onPress={applyUpdate}>
+          <Text style={styles.updateBarText}>A new version of SafeAlert is ready — tap to update</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -264,6 +273,22 @@ const styles = StyleSheet.create({
   toastTitle: { fontFamily: fonts.sora600, fontSize: 13.5, color: colors.ink },
   toastMeta: { fontFamily: fonts.sans400, fontSize: 11.5, color: colors.muted, marginTop: 1 },
   toastChevron: { fontSize: 16, color: colors.primary },
+  updateBar: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: colors.primary,
+    borderRadius: 13,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+  },
+  updateBarText: { fontFamily: fonts.sans600, fontSize: 12.5, color: '#fff' },
   adminDenied: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, padding: 30 },
   adminDeniedTitle: { fontFamily: fonts.sora700, fontSize: 18, color: colors.ink },
   adminDeniedText: { fontFamily: fonts.sans400, fontSize: 13, color: colors.muted, textAlign: 'center' },

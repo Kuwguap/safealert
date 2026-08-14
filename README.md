@@ -96,12 +96,14 @@ screens). App-wide state (location, places, settings, weather, alerts) lives in
 ## Maps
 
 - `src/components/MapPanel.tsx` — interactive dark map panel: drag to pan,
-  pinch to zoom (native), +/− and recenter (◎) buttons, 3D/Satellite toggle,
-  accurate tile layer (works worldwide), vignette/flood tint, badge chips.
-  The pulse marker stays anchored to the alert/user coordinate while panning.
-- `src/components/WireframeMap.tsx` — animated 3D wireframe terrain with the
-  prototype's undulating wave motion (decorative)
-- `src/components/PulseRings.tsx` — pulsing radius rings + glowing pin
+  pinch to zoom (native), +/− and recenter (◎) buttons, 3D/Map/Satellite
+  toggle, accurate tile layer (works worldwide), vignette/flood tint, chips.
+- `src/components/Map3D/` + `web/map3d.html` — the 3D view: real MapLibre GL
+  (WebGL) with the CARTO Dark Matter vector basemap, extruded 3D buildings,
+  cinematic fly-in + idle orbit, inertial pan/pinch/rotate, amber beacon and
+  the live POI layer in scene. Served as a static hosted page (inline srcdoc
+  breaks MapLibre's tile worker) loaded via iframe (web) / WebView (native).
+- `src/components/PulseRings.tsx` — pulsing radius rings + glowing pin (2D)
 
 ## Notes
 

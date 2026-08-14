@@ -43,7 +43,15 @@ const head = `
 
 const indexPath = path.join(dist, 'index.html');
 let html = fs.readFileSync(indexPath, 'utf8').replace('</head>', head);
+
+// Version stamp: the bundle filename hash identifies this build. The app
+// compares window.__SA_VERSION against version.json to self-update stale
+// cached copies (see src/util/webUpdate.ts).
+const hashMatch = html.match(/index-([a-f0-9]+)\.js/);
+const version = hashMatch ? hashMatch[1] : String(Date.now());
+html = html.replace('</body>', `<script>window.__SA_VERSION=${JSON.stringify(version)}</script></body>`);
 fs.writeFileSync(indexPath, html);
+fs.writeFileSync(path.join(dist, 'version.json'), JSON.stringify({ v: version }));
 
 // SPA fallback + Jekyll opt-out
 fs.copyFileSync(indexPath, path.join(dist, '404.html'));
