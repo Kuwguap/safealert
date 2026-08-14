@@ -278,10 +278,9 @@ const styles = StyleSheet.create({
   },
   legend: {
     position: 'absolute',
-    flexDirection: 'row',
-    gap: 9,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
+    gap: 7,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
     backgroundColor: colors.mapChipBg,
     borderWidth: 1,
     borderColor: colors.mapChipBorder,

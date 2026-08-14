@@ -203,7 +203,7 @@ export default function MapPanel({
           </>
         )}
       </View>
-      <MapLegend style={view && onViewChange ? styles.legendBottom : styles.legendTop} />
+      <MapLegend style={styles.legendLeft} />
       {view && onViewChange ? (
         <View style={styles.toggleWrap}>
           <MapToggle view={view} onChange={onViewChange} />
@@ -270,8 +270,7 @@ const styles = StyleSheet.create({
     marginTop: -54,
     gap: 6,
   },
-  legendBottom: { bottom: 12, right: 12 },
-  legendTop: { top: 12, right: 12 },
+  legendLeft: { left: 12, top: '50%', marginTop: -52 },
   roundBtn: {
     width: 32,
     height: 32,

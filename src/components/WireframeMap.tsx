@@ -1,16 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import Svg, { Circle, Defs, Line, LinearGradient, Polyline, RadialGradient, Rect, Stop, Text as SvgText } from 'react-native-svg';
+import Svg, { Circle, Defs, Ellipse, Line, LinearGradient, Polygon, Polyline, RadialGradient, Rect, Stop, Text as SvgText } from 'react-native-svg';
 import { colors, fonts } from '../theme';
 import { LatLng, latToTileY, lonToTileX } from '../util/geo';
 import { POI_KEYS, usePois } from './PoiLayer';
 
-// Geo-anchored 3D wireframe map. Unlike the old decorative version, this is a
-// real perspective projection of the same Web-Mercator plane the tile layers
-// use: the shared viewport (pan/pinch/zoom in MapPanel) moves the camera, and
-// live data — landmark POIs, place names and the alert/user beacon — is
-// projected into the scene at its true position. The undulating grid is
-// anchored to world coordinates, so terrain scrolls under you as you pan.
+// Geo-anchored 3D wireframe map: a true perspective projection of the same
+// Web-Mercator plane the tile layers use. The shared viewport (pan / pinch /
+// zoom in MapPanel) moves the camera, the world-anchored terrain scrolls
+// underneath, and live data — POIs, place names and the alert/user beacon —
+// renders in scene at its real position with depth scaling and atmosphere.
 
 const LINE = '122,165,216';
 const ACCENT = '245,158,11';
@@ -68,7 +67,7 @@ export default function WireframeMap({ viewCenter, zoom, marker, width: w, heigh
     const zq = Math.round(zoom);
     const G15 = 64 * 2 ** (REF_Z - zq); // grid spacing in world px (~45–90 screen px)
     const mg = ground(marker);
-    const amp = camH * 0.1;
+    const amp = camH * 0.08;
     const noise = (u: number, v: number) =>
       Math.sin(u * 1.7 + t * 0.35) * 0.55 + Math.sin(v * 1.3 - t * 0.22) * 0.5 + Math.sin((u + v) * 0.8 + t * 0.15) * 0.75;
     const hgt = (gx: number, gy: number) => {
@@ -81,32 +80,35 @@ export default function WireframeMap({ viewCenter, zoom, marker, width: w, heigh
     const gyMin = z0 - zf; // far (north)
     const gyMax = z0 - zn; // near (south)
 
-    // east-west lines: constant world y, alpha fades with depth
-    const horizontals: { pts: string; a: number }[] = [];
+    // east-west lines: constant world y; every 4th world line is a brighter major
+    const horizontals: { pts: string; a: number; width: number }[] = [];
     for (let wy = Math.ceil((c.y + gyMin / k) / G15) * G15; wy <= c.y + gyMax / k; wy += G15) {
       const gy = (wy - c.y) * k;
       const z = depth(gy);
       if (z < zn || z > zf) continue;
-      const a = Math.max(0.05, 0.55 * (1 - (z - zn) / (zf - zn)));
+      const major = Math.abs(Math.round(wy / G15)) % 4 === 0;
+      const fade = 1 - (z - zn) / (zf - zn);
+      const a = Math.max(0.05, (major ? 0.85 : 0.5) * fade);
       const pts: string[] = [];
-      for (let gx = gxMin; gx <= gxMax; gx += w * 0.13) {
+      for (let gx = gxMin; gx <= gxMax; gx += w * 0.09) {
         const [px, py] = proj(gx, hgt(gx, gy), z);
         pts.push(`${px.toFixed(1)},${py.toFixed(1)}`);
       }
-      horizontals.push({ pts: pts.join(' '), a });
+      horizontals.push({ pts: pts.join(' '), a, width: major ? 1.3 : 0.9 });
     }
     // north-south lines: constant world x
-    const verticals: string[] = [];
+    const verticals: { pts: string; a: number; width: number }[] = [];
     for (let wx = Math.ceil((c.x + gxMin / k) / G15) * G15; wx <= c.x + gxMax / k; wx += G15) {
       const gx = (wx - c.x) * k;
+      const major = Math.abs(Math.round(wx / G15)) % 4 === 0;
       const pts: string[] = [];
-      for (let gy = gyMax; gy >= gyMin; gy -= w * 0.11) {
+      for (let gy = gyMax; gy >= gyMin; gy -= w * 0.1) {
         const z = depth(gy);
         if (z < zn) continue;
         const [px, py] = proj(gx, hgt(gx, gy), z);
         pts.push(`${px.toFixed(1)},${py.toFixed(1)}`);
       }
-      if (pts.length > 1) verticals.push(pts.join(' '));
+      if (pts.length > 1) verticals.push({ pts: pts.join(' '), a: major ? 0.3 : 0.16, width: major ? 1.2 : 0.9 });
     }
 
     // ---- radar rings around the marker -------------------------------------
@@ -114,7 +116,7 @@ export default function WireframeMap({ viewCenter, zoom, marker, width: w, heigh
     const Rmax = w * 0.55;
     for (let i = 0; i < 3; i++) {
       const r = (t * w * 0.12 + (i * Rmax) / 3) % Rmax;
-      const a = Math.max(0, 0.8 * (1 - r / Rmax));
+      const a = Math.max(0, 0.9 * (1 - r / Rmax));
       const pts: string[] = [];
       for (let j = 0; j <= 44; j++) {
         const ang = (j / 44) * Math.PI * 2;
@@ -127,18 +129,39 @@ export default function WireframeMap({ viewCenter, zoom, marker, width: w, heigh
       if (pts.length > 1) rings.push({ pts: pts.join(' '), a });
     }
 
-    // ---- marker beacon ------------------------------------------------------
+    // ---- the beacon: alert / user position ----------------------------------
     const mz = depth(mg.gy);
+    const beaconVisible = mz > zn + 1 && mz < zf && Math.abs(mg.gx) < w * 2;
+    let beaconDefs: React.ReactNode = null;
     let beacon: React.ReactNode = null;
-    if (mz > zn + 1 && mz < zf && Math.abs(mg.gx) < w * 2) {
+    if (beaconVisible) {
+      const s = z0 / mz; // depth scale
       const [bx, by] = proj(mg.gx, 0, mz);
-      const [tx, ty] = proj(mg.gx, camH * 0.6, mz);
-      const pulse = (4 + Math.sin(t * 3) * 1.4) * (z0 / mz);
+      const [tx, ty] = proj(mg.gx, camH * 0.72, mz);
+      const pulse = 1 + 0.25 * Math.sin(t * 3);
+      const bob = Math.sin(t * 2.2) * 4 * s;
+      const dSize = 7 * s;
+      const dy = ty - dSize - 4 + bob; // floating diamond above the beam
+      // NOTE: gradients on <Line> need userSpaceOnUse — a line's bounding box
+      // has zero width, so objectBoundingBox gradients render nothing.
+      beaconDefs = (
+        <LinearGradient id="beam" x1={bx} y1={by} x2={tx} y2={ty} gradientUnits="userSpaceOnUse">
+          <Stop offset="0" stopColor={`rgb(${ACCENT})`} stopOpacity={0.95} />
+          <Stop offset="1" stopColor={`rgb(${ACCENT})`} stopOpacity={0} />
+        </LinearGradient>
+      );
       beacon = (
         <>
-          <Line x1={bx} y1={by} x2={tx} y2={ty} stroke="url(#beacon)" strokeWidth={2.5} />
-          <Circle cx={bx} cy={by} r={pulse * 4} fill="url(#markerGlow)" />
-          <Circle cx={bx} cy={by} r={3.5 * (z0 / mz)} fill={`rgb(${ACCENT})`} />
+          <Ellipse cx={bx} cy={by} rx={16 * s * pulse} ry={5.5 * s * pulse} fill="url(#markerGlow)" />
+          <Line x1={bx} y1={by} x2={tx} y2={ty} stroke="url(#beam)" strokeWidth={6 * s} strokeOpacity={0.25} />
+          <Line x1={bx} y1={by} x2={tx} y2={ty} stroke="url(#beam)" strokeWidth={2.4 * s} />
+          <Circle cx={bx} cy={by} r={4.5 * s * pulse} fill={`rgb(${ACCENT})`} stroke="#fff7e6" strokeWidth={1.6} />
+          <Polygon
+            points={`${tx},${dy - dSize} ${tx + dSize * 0.7},${dy} ${tx},${dy + dSize} ${tx - dSize * 0.7},${dy}`}
+            fill={`rgb(${ACCENT})`}
+            stroke="#fff7e6"
+            strokeWidth={1.2}
+          />
         </>
       );
     }
@@ -166,23 +189,46 @@ export default function WireframeMap({ viewCenter, zoom, marker, width: w, heigh
     content = (
       <Svg width={w} height={h}>
         <Defs>
-          <LinearGradient id="beacon" x1="0" y1="1" x2="0" y2="0">
-            <Stop offset="0" stopColor={`rgb(${ACCENT})`} stopOpacity={0.85} />
-            <Stop offset="1" stopColor={`rgb(${ACCENT})`} stopOpacity={0} />
+          <LinearGradient id="horizonGlow" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor={`rgb(${LINE})`} stopOpacity={0.3} />
+            <Stop offset="1" stopColor={`rgb(${LINE})`} stopOpacity={0} />
+          </LinearGradient>
+          <LinearGradient id="groundFade" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor="#16294a" stopOpacity={0.5} />
+            <Stop offset="1" stopColor="#16294a" stopOpacity={0} />
           </LinearGradient>
           <RadialGradient id="markerGlow" cx="50%" cy="50%" r="50%">
-            <Stop offset="0" stopColor={`rgb(${ACCENT})`} stopOpacity={0.9} />
+            <Stop offset="0" stopColor={`rgb(${ACCENT})`} stopOpacity={0.85} />
             <Stop offset="1" stopColor={`rgb(${ACCENT})`} stopOpacity={0} />
           </RadialGradient>
+          {beaconDefs}
         </Defs>
+
+        {/* atmosphere: sky, horizon glow, ground depth */}
+        <Rect x={0} y={0} width={w} height={horizonY} fill="#0a1120" />
+        <Rect x={0} y={horizonY} width={w} height={26} fill="url(#horizonGlow)" />
+        <Line x1={0} y1={horizonY} x2={w} y2={horizonY} stroke={`rgba(${LINE},0.5)`} strokeWidth={1} />
+        <Rect x={0} y={horizonY} width={w} height={(h - horizonY) * 0.55} fill="url(#groundFade)" />
+
+        {/* compass — the 3D view is always north-up */}
+        <Polyline
+          points={`${w / 2 - 4},${horizonY - 20} ${w / 2},${horizonY - 25} ${w / 2 + 4},${horizonY - 20}`}
+          fill="none"
+          stroke="rgba(215,227,245,0.45)"
+          strokeWidth={1.2}
+        />
+        <SvgText x={w / 2} y={horizonY - 8} fill="rgba(215,227,245,0.5)" fontSize={10} fontFamily={fonts.sans600} textAnchor="middle">
+          N
+        </SvgText>
+
         {horizontals.map((l, i) => (
-          <Polyline key={`h${i}`} points={l.pts} fill="none" stroke={`rgba(${LINE},${l.a.toFixed(3)})`} strokeWidth={1} />
+          <Polyline key={`h${i}`} points={l.pts} fill="none" stroke={`rgba(${LINE},${l.a.toFixed(3)})`} strokeWidth={l.width} />
         ))}
-        {verticals.map((pts, i) => (
-          <Polyline key={`v${i}`} points={pts} fill="none" stroke={`rgba(${LINE},0.2)`} strokeWidth={1} />
+        {verticals.map((l, i) => (
+          <Polyline key={`v${i}`} points={l.pts} fill="none" stroke={`rgba(${LINE},${l.a.toFixed(3)})`} strokeWidth={l.width} />
         ))}
         {rings.map((r, i) => (
-          <Polyline key={`r${i}`} points={r.pts} fill="none" stroke={`rgba(${ACCENT},${r.a.toFixed(3)})`} strokeWidth={1.6} />
+          <Polyline key={`r${i}`} points={r.pts} fill="none" stroke={`rgba(${ACCENT},${r.a.toFixed(3)})`} strokeWidth={1.8} />
         ))}
         {places.map((pl) => {
           const fs = Math.min(12, Math.max(8, 11 * (z0 / pl.z)));
@@ -191,7 +237,7 @@ export default function WireframeMap({ viewCenter, zoom, marker, width: w, heigh
               key={pl.p.id}
               x={pl.px}
               y={pl.py}
-              fill="rgba(215,227,245,0.75)"
+              fill="rgba(215,227,245,0.7)"
               fontSize={fs}
               fontFamily={fonts.sans600}
               letterSpacing="2"
@@ -201,37 +247,38 @@ export default function WireframeMap({ viewCenter, zoom, marker, width: w, heigh
             </SvgText>
           );
         })}
-        {beacon}
         {shown.map((m, i) => {
           const key = KEY_BY_KIND[m.p.kind as keyof typeof KEY_BY_KIND];
           if (!key) return null;
           const [bx, by] = proj(m.gx, 0, m.z);
           const [hx, hy] = proj(m.gx, stemH, m.z);
-          const s = z0 / m.z; // depth scale
+          const s = z0 / m.z;
           const r = Math.min(9, Math.max(3.5, 7 * s));
           const name = m.p.name.length > 18 ? `${m.p.name.slice(0, 17)}…` : m.p.name;
           const fs = Math.min(11, Math.max(8, 10 * s));
-          const chipW = name.length * fs * 0.58 + 12;
+          const chipW = name.length * fs * 0.58 + 18;
           return (
             <React.Fragment key={m.p.id}>
-              <Line x1={bx} y1={by} x2={hx} y2={hy} stroke={key.color} strokeWidth={1.4} strokeOpacity={0.75} />
-              <Circle cx={bx} cy={by} r={2.2 * s} fill={key.color} opacity={0.55} />
+              <Ellipse cx={bx} cy={by} rx={r * 1.5} ry={r * 0.5} fill={key.color} opacity={0.22} />
+              <Line x1={bx} y1={by} x2={hx} y2={hy} stroke={key.color} strokeWidth={1.5} strokeOpacity={0.8} />
               <Circle cx={hx} cy={hy} r={r * 1.9} fill={key.color} opacity={0.16} />
-              <Circle cx={hx} cy={hy} r={r} fill={key.color} stroke="rgba(255,255,255,0.9)" strokeWidth={1.4} />
+              <Circle cx={hx} cy={hy} r={r} fill={key.color} stroke="rgba(255,255,255,0.92)" strokeWidth={1.4} />
+              <Circle cx={hx} cy={hy} r={r * 0.35} fill="#fff" opacity={0.9} />
               {i >= labelFrom ? (
                 <>
                   <Rect
                     x={hx - chipW / 2}
-                    y={hy - r - fs - 14}
+                    y={hy - r - fs - 15}
                     width={chipW}
-                    height={fs + 9}
+                    height={fs + 10}
                     rx={5}
-                    fill="rgba(13,22,38,0.82)"
-                    stroke="rgba(122,165,216,0.3)"
+                    fill="rgba(13,22,38,0.85)"
+                    stroke="rgba(122,165,216,0.35)"
                     strokeWidth={1}
                   />
+                  <Circle cx={hx - chipW / 2 + 8} cy={hy - r - 10 - fs / 2 + 2} r={2.5} fill={key.color} />
                   <SvgText
-                    x={hx}
+                    x={hx + 5}
                     y={hy - r - 8}
                     fill={colors.mapText}
                     fontSize={fs}
@@ -245,6 +292,7 @@ export default function WireframeMap({ viewCenter, zoom, marker, width: w, heigh
             </React.Fragment>
           );
         })}
+        {beacon}
       </Svg>
     );
   }
