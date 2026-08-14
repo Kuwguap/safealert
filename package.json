@@ -32,7 +32,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "build:web": "expo export -p web && node scripts/prepare-web.js",
-    "deploy": "npm run build:web && gh-pages -d dist -b gh-pages -t true"
+    "deploy": "npm run build:web && node scripts/deploy-web.js"
   },
   "private": true
 }
