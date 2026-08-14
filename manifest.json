@@ -1,0 +1,25 @@
+{
+  "name": "SafeAlert",
+  "short_name": "SafeAlert",
+  "description": "Location-aware emergency alerts for Ghana — AMBER, floods, weather, SOS.",
+  "start_url": "/safealert/",
+  "scope": "/safealert/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#faf7f1",
+  "theme_color": "#b45309",
+  "icons": [
+    {
+      "src": "/safealert/icon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/safealert/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
