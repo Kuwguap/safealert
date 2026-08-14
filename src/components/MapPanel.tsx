@@ -4,9 +4,9 @@ import Svg, { Defs, Rect, RadialGradient, Stop } from 'react-native-svg';
 import { colors, fonts } from '../theme';
 import { clamp, LatLng, MAX_ZOOM, MIN_ZOOM, panCenter, screenOffset, TILE_PROVIDERS, tilesForView } from '../util/geo';
 import { useLayoutSize } from '../util/useLayoutSize';
-import PoiLayer, { MapLegend } from './PoiLayer';
+import Map3D, { Map3DHandle } from './Map3D';
+import PoiLayer, { MapLegend, usePois } from './PoiLayer';
 import PulseMarker from './PulseRings';
-import WireframeMap from './WireframeMap';
 
 export type MapView = '3d' | 'street' | 'satellite';
 
@@ -124,9 +124,23 @@ export default function MapPanel({
     []
   );
 
-  const zoomBy = (dz: number) =>
-    setViewport((v) => ({ ...v, zoom: clamp(v.zoom + dz, MIN_ZOOM, MAX_ZOOM) }));
-  const recenter = () => setViewport({ center, zoom });
+  const map3d = useRef<Map3DHandle>(null);
+  const is3d = view === '3d';
+  // MapLibre owns its camera in 3D; the shared viewport drives the 2D layers
+  const zoomBy = (dz: number) => {
+    if (is3d) map3d.current?.zoomBy(dz);
+    else setViewport((v) => ({ ...v, zoom: clamp(v.zoom + dz, MIN_ZOOM, MAX_ZOOM) }));
+  };
+  const recenter = () => {
+    if (is3d) map3d.current?.recenter();
+    else setViewport({ center, zoom });
+  };
+
+  // POIs feed both the 2D overlay and the 3D scene (module-level cache dedupes)
+  const pois = usePois(viewport.center, viewport.zoom, size.w, size.h);
+  useEffect(() => {
+    if (is3d) map3d.current?.setPois(pois);
+  }, [pois, is3d]);
 
   const tiles = showTiles && size.w > 0 ? tilesForView(viewport.center, viewport.zoom, size.w, size.h) : [];
   // Dark vignette only suits imagery; the street map stays clean. The flood
@@ -138,15 +152,16 @@ export default function MapPanel({
 
   return (
     <View style={[styles.panel, style]}>
-      {/* One interactive surface: drag/pinch pans and zooms every view, 3D included */}
-      <View ref={ref} style={StyleSheet.absoluteFill} onLayout={onLayout} {...panResponder.panHandlers}>
-        {view === '3d' ? (
-          <WireframeMap
-            viewCenter={viewport.center}
-            zoom={viewport.zoom}
+      {/* Interactive surface — our PanResponder drives the 2D layers; in 3D
+          MapLibre handles its own (better) gestures, so we stay out of the way */}
+      <View ref={ref} style={StyleSheet.absoluteFill} onLayout={onLayout} {...(is3d ? {} : panResponder.panHandlers)}>
+        {is3d ? (
+          <Map3D
+            ref={map3d}
+            key={`${center.lat.toFixed(4)},${center.lon.toFixed(4)}`}
+            initialCenter={viewport.center}
+            initialZoom={viewport.zoom}
             marker={center}
-            width={size.w}
-            height={size.h}
           />
         ) : (
           <>

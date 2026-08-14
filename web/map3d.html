@@ -1,0 +1,161 @@
+<!doctype html><html><head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
+<title>SafeAlert 3D</title>
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet"/>
+<style>
+  html,body,#map{margin:0;padding:0;height:100%;background:#0d1626;overflow:hidden}
+  .rings{width:130px;height:130px;pointer-events:none;position:relative}
+  .rings i{position:absolute;left:50%;top:50%;width:130px;height:130px;margin:-65px 0 0 -65px;
+    border:1.5px solid #f59e0b;border-radius:50%;transform:scale(.08);opacity:.9;
+    animation:saPulse 3.6s linear infinite}
+  .rings i:nth-child(2){animation-delay:-1.8s}
+  @keyframes saPulse{to{transform:scale(1);opacity:0}}
+  .beacon{pointer-events:none;display:flex;flex-direction:column;align-items:center}
+  .beam{width:3px;height:46px;background:linear-gradient(to top,#f59e0b,rgba(245,158,11,0));border-radius:2px}
+  .core{width:15px;height:15px;border-radius:50%;background:#f59e0b;border:2.5px solid #fff7e6;
+    box-shadow:0 0 20px 5px rgba(245,158,11,.75);margin-top:-3px}
+  .maplibregl-ctrl-attrib{background:rgba(13,22,38,.55)!important}
+  .maplibregl-ctrl-attrib, .maplibregl-ctrl-attrib a{color:#8fa8c8!important;font-size:10px}
+</style></head><body><div id="map"></div>
+<script>
+// rAF fallback: browsers freeze requestAnimationFrame in hidden/backgrounded
+// tabs, which stalls MapLibre's render loop entirely. Native rAF wins when
+// visible; a timer keeps the map alive otherwise.
+(function () {
+  var native = window.requestAnimationFrame ? window.requestAnimationFrame.bind(window) : null;
+  var counter = 0, pending = {};
+  window.requestAnimationFrame = function (cb) {
+    var id = ++counter;
+    pending[id] = cb;
+    var fire = function (ts) {
+      var f = pending[id];
+      if (f) { delete pending[id]; f(typeof ts === 'number' ? ts : performance.now()); }
+    };
+    setTimeout(fire, 55);
+    if (native) native(fire);
+    return id;
+  };
+  window.cancelAnimationFrame = function (id) { delete pending[id]; };
+})();
+</script>
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script>
+// Config via query params: ?lat=&lon=&zoom=&mlat=&mlon=
+var q = new URLSearchParams(location.search);
+var CFG = {
+  lat: parseFloat(q.get('lat')) || 6.6745,
+  lon: parseFloat(q.get('lon')) || -1.5716,
+  zoom: Math.min(17.5, Math.max(11, (parseFloat(q.get('zoom')) || 14) + 1.5)),
+  mlat: parseFloat(q.get('mlat')) || parseFloat(q.get('lat')) || 6.6745,
+  mlon: parseFloat(q.get('mlon')) || parseFloat(q.get('lon')) || -1.5716
+};
+var poisData = null;
+var map = new maplibregl.Map({
+  container: 'map',
+  style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+  center: [CFG.lon, CFG.lat],
+  zoom: Math.max(3, CFG.zoom - 1.6),
+  pitch: 0,
+  bearing: 0,
+  maxPitch: 72,
+  antialias: true,
+  attributionControl: { compact: true }
+});
+var interacted = false;
+['mousedown','touchstart','wheel'].forEach(function (ev) {
+  map.getCanvas().addEventListener(ev, function () { interacted = true; }, { passive: true });
+});
+// slow cinematic orbit until the user takes over
+function spin() {
+  if (interacted) return;
+  map.easeTo({ bearing: map.getBearing() + 9, duration: 4500, easing: function (t) { return t; } });
+}
+map.on('moveend', function () { if (!interacted) spin(); });
+
+function applyPois() {
+  var s = map.getSource('sa-pois');
+  if (s && poisData) s.setData({ type: 'FeatureCollection', features: poisData });
+}
+
+map.on('load', function () {
+  try {
+    var st = map.getStyle();
+    var buildingLayer = null, symWithFont = null, firstSymbolId = null;
+    for (var i = 0; i < st.layers.length; i++) {
+      var L = st.layers[i];
+      if (!buildingLayer && L['source-layer'] === 'building') buildingLayer = L;
+      if (L.type === 'symbol') {
+        if (!firstSymbolId) firstSymbolId = L.id;
+        if (!symWithFont && L.layout && L.layout['text-font']) symWithFont = L;
+      }
+    }
+    if (buildingLayer) {
+      map.addLayer({
+        id: 'sa-3d-buildings', type: 'fill-extrusion',
+        source: buildingLayer.source, 'source-layer': 'building', minzoom: 13.5,
+        paint: {
+          'fill-extrusion-color': '#2c3f66',
+          'fill-extrusion-height': ['coalesce', ['get', 'render_height'], ['get', 'height'], 11],
+          'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], ['get', 'min_height'], 0],
+          'fill-extrusion-opacity': 0.9
+        }
+      }, firstSymbolId || undefined);
+    }
+    map.addSource('sa-pois', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    var colorMatch = ['match', ['get', 'kind'],
+      'school', '#a78bfa', 'hospital', '#f0655c', 'police', '#6ea3d8', 'fire', '#f59e0b', '#d7e3f5'];
+    map.addLayer({
+      id: 'sa-poi-dots', type: 'circle', source: 'sa-pois',
+      paint: {
+        'circle-color': colorMatch, 'circle-radius': 5.5,
+        'circle-stroke-color': 'rgba(255,255,255,0.9)', 'circle-stroke-width': 1.5,
+        'circle-pitch-alignment': 'map'
+      }
+    });
+    var layout = {
+      'text-field': ['get', 'name'], 'text-size': 11,
+      'text-offset': [0, 1.1], 'text-anchor': 'top', 'text-optional': true
+    };
+    if (symWithFont) layout['text-font'] = symWithFont.layout['text-font'];
+    map.addLayer({
+      id: 'sa-poi-labels', type: 'symbol', source: 'sa-pois', layout: layout,
+      paint: { 'text-color': colorMatch, 'text-halo-color': '#0d1626', 'text-halo-width': 1.4 }
+    });
+    applyPois();
+  } catch (e) { /* basemap still renders */ }
+
+  // beacon: ground-aligned pulse rings + a screen-facing beam and core
+  var rings = document.createElement('div');
+  rings.className = 'rings'; rings.innerHTML = '<i></i><i></i>';
+  new maplibregl.Marker({ element: rings, pitchAlignment: 'map', rotationAlignment: 'map' })
+    .setLngLat([CFG.mlon, CFG.mlat]).addTo(map);
+  var b = document.createElement('div');
+  b.className = 'beacon'; b.innerHTML = '<div class="beam"></div><div class="core"></div>';
+  new maplibregl.Marker({ element: b, anchor: 'bottom', offset: [0, 9] })
+    .setLngLat([CFG.mlon, CFG.mlat]).addTo(map);
+
+  // cinematic fly-in, then the idle orbit takes over via moveend
+  map.easeTo({ zoom: CFG.zoom, pitch: 58, bearing: -18, duration: 2400 });
+});
+
+window.__route = function (m) {
+  try {
+    if (!m || !m.type) return;
+    if (m.type === 'pois') { poisData = m.features || []; applyPois(); }
+    else if (m.type === 'zoom') { interacted = true; map.easeTo({ zoom: map.getZoom() + m.delta, duration: 350 }); }
+    else if (m.type === 'recenter') {
+      interacted = true;
+      map.easeTo({ center: [CFG.lon, CFG.lat], zoom: CFG.zoom, pitch: 58, bearing: -18, duration: 900 });
+    }
+  } catch (e) {}
+};
+window.addEventListener('message', function (e) {
+  var d = e.data;
+  if (typeof d === 'string') { try { d = JSON.parse(d); } catch (err) { return; } }
+  window.__route(d);
+});
+document.addEventListener('message', function (e) { // Android WebView delivers here
+  try { window.__route(JSON.parse(e.data)); } catch (err) {}
+});
+</script></body></html>

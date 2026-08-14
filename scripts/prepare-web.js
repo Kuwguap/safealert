@@ -12,6 +12,10 @@ const BASE = '/safealert';
 // App icon for the manifest + Apple touch icon
 fs.copyFileSync(path.join(__dirname, '..', 'assets', 'icon.png'), path.join(dist, 'icon.png'));
 
+// Static MapLibre page for the 3D view (loaded by iframe/WebView — must be a
+// real HTTP document; srcdoc breaks MapLibre's tile worker)
+fs.copyFileSync(path.join(__dirname, '..', 'web', 'map3d.html'), path.join(dist, 'map3d.html'));
+
 const manifest = {
   name: 'SafeAlert',
   short_name: 'SafeAlert',
