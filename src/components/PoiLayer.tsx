@@ -138,11 +138,12 @@ interface PoiLayerProps {
   baseLayer?: 'street' | 'satellite';
 }
 
-export default function PoiLayer({ viewCenter, zoom, width, height, baseLayer = 'satellite' }: PoiLayerProps) {
+// Debounced POI fetch keyed on the (rounded) viewport — shared by the 2D
+// overlay below and the 3D wireframe map.
+export function usePois(viewCenter: LatLng, zoom: number, width: number, height: number): Poi[] {
   const [pois, setPois] = useState<Poi[]>([]);
   const seq = useRef(0);
 
-  // Debounced fetch keyed on the (rounded) viewport
   useEffect(() => {
     if (zoom < 12 || width === 0) {
       setPois([]);
@@ -168,6 +169,12 @@ export default function PoiLayer({ viewCenter, zoom, width, height, baseLayer = 
       if (retryTimer) clearTimeout(retryTimer);
     };
   }, [Math.round(viewCenter.lat * 200) / 200, Math.round(viewCenter.lon * 200) / 200, Math.round(zoom), width, height]);
+
+  return pois;
+}
+
+export default function PoiLayer({ viewCenter, zoom, width, height, baseLayer = 'satellite' }: PoiLayerProps) {
+  const pois = usePois(viewCenter, zoom, width, height);
 
   if (zoom < 12 || width === 0) return null;
 

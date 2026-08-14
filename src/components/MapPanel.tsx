@@ -138,74 +138,82 @@ export default function MapPanel({
 
   return (
     <View style={[styles.panel, style]}>
-      {view === '3d' ? <WireframeMap /> : null}
-      {showTiles ? (
-        <View ref={ref} style={StyleSheet.absoluteFill} onLayout={onLayout} {...panResponder.panHandlers}>
-          {tiles.map((tile) => (
-            <Image
-              key={tile.key}
-              source={{ uri: TILE_PROVIDERS[baseLayer](tile) }}
-              style={{ position: 'absolute', left: tile.left, top: tile.top, width: tile.size + 0.5, height: tile.size + 0.5 }}
-            />
-          ))}
-          {baseLayer === 'satellite'
-            ? tiles.map((tile) => (
-                <Image
-                  key={`lbl-${tile.key}`}
-                  source={{ uri: TILE_PROVIDERS.satelliteLabels(tile) }}
-                  style={{ position: 'absolute', left: tile.left, top: tile.top, width: tile.size + 0.5, height: tile.size + 0.5 }}
-                />
-              ))
-            : null}
-          {showVignette ? (
-            <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" pointerEvents="none">
-              <Defs>
-                {!isFlood ? (
-                  <RadialGradient id="vig" cx="50%" cy="50%" r="70%">
-                    <Stop offset="45%" stopColor={colors.mapDark} stopOpacity={0} />
-                    <Stop offset="100%" stopColor={colors.mapDark} stopOpacity={0.5} />
-                  </RadialGradient>
-                ) : (
-                  <RadialGradient id="vig" cx="50%" cy="50%" r="75%">
-                    <Stop offset="0%" stopColor={colors.flood} stopOpacity={0.45} />
-                    <Stop offset="34%" stopColor={colors.flood} stopOpacity={0.15} />
-                    <Stop offset="100%" stopColor={colors.mapDark} stopOpacity={0.45} />
-                  </RadialGradient>
-                )}
-              </Defs>
-              <Rect x="0" y="0" width="100%" height="100%" fill="url(#vig)" />
-            </Svg>
-          ) : null}
-          <PoiLayer viewCenter={viewport.center} zoom={viewport.zoom} width={size.w} height={size.h} baseLayer={baseLayer} />
-          {markerVisible ? (
-            <PulseMarker
-              size={ringSize}
-              ringColor={isFlood ? colors.floodRing : colors.mapAccent}
-              pinColor={isFlood ? colors.floodPin : colors.mapAccent}
-              pinBorderColor={isFlood ? '#eaf2fb' : '#fff7e6'}
-              glowColor={isFlood ? colors.floodRing : colors.mapAccent}
-              style={{
-                position: 'absolute',
-                left: size.w / 2 + marker!.dx,
-                top: size.h / 2 + marker!.dy,
-              }}
-            />
-          ) : null}
-        </View>
-      ) : null}
-      {showTiles ? <MapLegend style={view && onViewChange ? styles.legendBottom : styles.legendTop} /> : null}
+      {/* One interactive surface: drag/pinch pans and zooms every view, 3D included */}
+      <View ref={ref} style={StyleSheet.absoluteFill} onLayout={onLayout} {...panResponder.panHandlers}>
+        {view === '3d' ? (
+          <WireframeMap
+            viewCenter={viewport.center}
+            zoom={viewport.zoom}
+            marker={center}
+            width={size.w}
+            height={size.h}
+          />
+        ) : (
+          <>
+            {tiles.map((tile) => (
+              <Image
+                key={tile.key}
+                source={{ uri: TILE_PROVIDERS[baseLayer](tile) }}
+                style={{ position: 'absolute', left: tile.left, top: tile.top, width: tile.size + 0.5, height: tile.size + 0.5 }}
+              />
+            ))}
+            {baseLayer === 'satellite'
+              ? tiles.map((tile) => (
+                  <Image
+                    key={`lbl-${tile.key}`}
+                    source={{ uri: TILE_PROVIDERS.satelliteLabels(tile) }}
+                    style={{ position: 'absolute', left: tile.left, top: tile.top, width: tile.size + 0.5, height: tile.size + 0.5 }}
+                  />
+                ))
+              : null}
+            {showVignette ? (
+              <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" pointerEvents="none">
+                <Defs>
+                  {!isFlood ? (
+                    <RadialGradient id="vig" cx="50%" cy="50%" r="70%">
+                      <Stop offset="45%" stopColor={colors.mapDark} stopOpacity={0} />
+                      <Stop offset="100%" stopColor={colors.mapDark} stopOpacity={0.5} />
+                    </RadialGradient>
+                  ) : (
+                    <RadialGradient id="vig" cx="50%" cy="50%" r="75%">
+                      <Stop offset="0%" stopColor={colors.flood} stopOpacity={0.45} />
+                      <Stop offset="34%" stopColor={colors.flood} stopOpacity={0.15} />
+                      <Stop offset="100%" stopColor={colors.mapDark} stopOpacity={0.45} />
+                    </RadialGradient>
+                  )}
+                </Defs>
+                <Rect x="0" y="0" width="100%" height="100%" fill="url(#vig)" />
+              </Svg>
+            ) : null}
+            <PoiLayer viewCenter={viewport.center} zoom={viewport.zoom} width={size.w} height={size.h} baseLayer={baseLayer} />
+            {markerVisible ? (
+              <PulseMarker
+                size={ringSize}
+                ringColor={isFlood ? colors.floodRing : colors.mapAccent}
+                pinColor={isFlood ? colors.floodPin : colors.mapAccent}
+                pinBorderColor={isFlood ? '#eaf2fb' : '#fff7e6'}
+                glowColor={isFlood ? colors.floodRing : colors.mapAccent}
+                style={{
+                  position: 'absolute',
+                  left: size.w / 2 + marker!.dx,
+                  top: size.h / 2 + marker!.dy,
+                }}
+              />
+            ) : null}
+          </>
+        )}
+      </View>
+      <MapLegend style={view && onViewChange ? styles.legendBottom : styles.legendTop} />
       {view && onViewChange ? (
         <View style={styles.toggleWrap}>
           <MapToggle view={view} onChange={onViewChange} />
         </View>
       ) : null}
-      {showTiles ? (
-        <View style={styles.zoomControls}>
-          <RoundButton label="+" onPress={() => zoomBy(1)} />
-          <RoundButton label="−" onPress={() => zoomBy(-1)} />
-          <RoundButton label="◎" onPress={recenter} />
-        </View>
-      ) : null}
+      <View style={styles.zoomControls}>
+        <RoundButton label="+" onPress={() => zoomBy(1)} />
+        <RoundButton label="−" onPress={() => zoomBy(-1)} />
+        <RoundButton label="◎" onPress={recenter} />
+      </View>
       {children}
     </View>
   );
